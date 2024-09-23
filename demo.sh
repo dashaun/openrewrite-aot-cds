@@ -102,6 +102,7 @@ validate_app() {
 }
 
 show_memory_usage() {
+    displayMessage "Check how much memory the application is using."
     local pid=$1
     local log_file=$2
     local rss
@@ -212,7 +213,7 @@ main() {
     talking_point
     java_stop
     talking_point
-    java_dash_jar_exploded
+    java_dash_jar_extract
     talking_point
     java_dash_jar_exploded exploded.log
     talking_point
