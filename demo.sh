@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+
+TEMP_DIR="upgrade-example"
+JAVA_8="8.0.422-librca"
+JAVA_23="23-librca"
+JAR_NAME="hello-spring-0.0.1-SNAPSHOT.jar"
+
+# Function definitions
+
+check_dependencies() {
+    local tools=("vendir" "http")
+    for tool in "${tools[@]}"; do
+        if ! command -v "$tool" &> /dev/null; then
+            echo "$tool not found. Please install $tool first."
+            exit 1
+        fi
+    done
+}
+
+talking_point() {
+    wait
+    clear
+}
+
+init_sdkman() {
+    local sdkman_init="${SDKMAN_DIR:-$HOME/.sdkman}/bin/sdkman-init.sh"
+    if [[ -f "$sdkman_init" ]]; then
+        source "$sdkman_init"
+    else
+        echo "SDKMAN not found. Please install SDKMAN first."
+        exit 1
+    fi
+    sdk update
+    sdk install java $JAVA_8
+    sdk install java $JAVA_23
+}
+
+init() {
+    rm -rf "$TEMP_DIR"
+    mkdir "$TEMP_DIR"
+    cd "$TEMP_DIR" || exit
+    clear
+}
+
+use_java() {
+    local version=$1
+    displayMessage "Use Java $version"
+    sdk use java "$version"
+    java -version
+}
+
+clone_app() {
+    displayMessage "Clone a Spring Boot 2.6.0 application"
+    git clone https://github.com/dashaun/hello-spring-boot-2-6.git ./
+}
+
+spring_boot_start() {
+    displayMessage "Start the Spring Boot application, Wait For It...."
+    ./mvnw -q clean package spring-boot:start -DskipTests 2>&1 | tee "$1" &
+}
+
+java_dash_jar() {
+    displayMessage "Start the Spring Boot application, Wait For It...."
+    ./mvnw clean package
+    java -jar ./target/$JAR_NAME 2>&1 | tee "$1" &
+}
+
+java_stop() {
+    displayMessage "Stop the Spring Boot application"
+    local npid=$(pgrep java)
+    pei "kill -9 $npid"
+}
+
+java_dash_jar_exploded() {
+    displayMessage "Extract the Spring Boot application for efficiency"
+    java -Djarmode=tools -jar ./target/$JAR_NAME extract --destination application
+    displayMessage "Start the extracted Spring Boot application, Wait For It...."
+    java -jar ./application/$JAR_NAME 2>&1 | tee "$1" &
+}
+
+java_dash_jar_cds() {
+  displayMessage "Create a CDS archive"
+  java -XX:ArchiveClassesAtExit=application.jsa -Dspring.context.exit=onRefresh -jar application/$JAR_NAME
+  displayMessage "Start the Spring Boot application with CDS archive, Wait For It...."
+  java -XX:SharedArchiveFile=application.jsa -jar application/$JAR_NAME 2>&1 | tee "$1" &
+}
+
+spring_boot_stop() {
+    displayMessage "Stop the Spring Boot application"
+    ./mvnw spring-boot:stop -Dspring-boot.stop.fork
+}
+
+validate_app() {
+    displayMessage "Check application health"
+    while ! http :8080/actuator/health 2>/dev/null; do sleep 1; done
+}
+
+show_memory_usage() {
+    local pid=$1
+    local log_file=$2
+    local rss
+    rss=$(ps -o rss= "$pid" | tail -n1)
+    local mem_usage
+    mem_usage=$(bc <<< "scale=1; ${rss}/1024")
+    echo "The process was using ${mem_usage} megabytes"
+    echo "${mem_usage}" >> "$log_file"
+}
+
+rewrite_application() {
+    displayMessage "Upgrade to Spring Boot 3.3"
+    ./mvnw -U org.openrewrite.maven:rewrite-maven-plugin:run \
+        -Drewrite.recipeArtifactCoordinates=org.openrewrite.recipe:rewrite-spring:LATEST \
+        -Drewrite.activeRecipes=org.openrewrite.java.spring.boot3.UpgradeSpringBoot_3_3
+}
+
+build_oci() {
+    displayMessage "Build OCI images"
+    docker pull dashaun/builder:tiny && docker tag dashaun/builder:tiny paketobuildpacks/builder:tiny && docker tag dashaun/builder:tiny paketobuildpacks/builder:base
+    ./mvnw clean spring-boot:build-image -Dspring-boot.build-image.imageName=demo:0.0.1-JVM -Dspring-boot.build-image.createdDate=now
+    ./mvnw clean -Pnative spring-boot:build-image -Dspring-boot.build-image.imageName=demo:0.0.1-Native -Dspring-boot.build-image.createdDate=now
+}
+
+displayMessage() {
+    echo "#### $1"
+    echo
+}
+
+startup_time() {
+    sed -nE 's/.* in ([0-9]+\.[0-9]+) seconds.*/\1/p' < "$1"
+}
+
+stats_so_far_table() {
+    displayMessage "Comparison of memory usage and startup times"
+    echo
+
+    printf "%-35s %-25s %-15s %s\n" "Configuration" "Startup Time (seconds)" "(MB) Used" "(MB) Savings"
+    echo "--------------------------------------------------------------------------------------------"
+
+    local mem1 start1 mem2 start2 perc2 percstart2 mem3 start3 perc3 percstart3 mem4 start4 perc4 percstart4
+    mem1=$(cat java8with2.6.log2)
+    start1=$(startup_time 'java8with2.6.log')
+    printf "%-35s %-25s %-15s %s\n" "Spring Boot 2.6 with Java 8" "$start1" "$mem1" "-"
+
+    mem2=$(cat java23with3.3.log2)
+    perc2=$(bc <<< "scale=2; 100 - ${mem2}/${mem1}*100")
+    start2=$(startup_time 'java23with3.3.log')
+    percstart2=$(bc <<< "scale=2; 100 - ${start2}/${start1}*100")
+    printf "%-35s %-25s %-15s %s \n" "Spring Boot 3.3 with Java 23" "$start2 ($percstart2% faster)" "$mem2" "$perc2%"
+
+    mem3=$(cat exploded.log2)
+    perc3=$(bc <<< "scale=2; 100 - ${mem3}/${mem1}*100")
+    start3=$(startup_time 'exploded.log')
+    percstart3=$(bc <<< "scale=2; 100 - ${start3}/${start1}*100")
+    printf "%-35s %-25s %-15s %s \n" "Spring Boot 3.3 extracted" "$start3 ($percstart3% faster)" "$mem3" "$perc3%"
+
+    mem4=$(cat cds.log2)
+    perc4=$(bc <<< "scale=2; 100 - ${mem4}/${mem1}*100")
+    start4=$(startup_time 'cds.log')
+    percstart4=$(bc <<< "scale=2; 100 - ${start4}/${start1}*100")
+    printf "%-35s %-25s %-15s %s \n" "Spring Boot 3.3 with CDS" "$start4 ($percstart4% faster)" "$mem4" "$perc4%"
+
+    echo "--------------------------------------------------------------------------------------------"
+}
+
+image_stats() {
+    docker images | grep demo
+}
+
+# Main execution flow
+
+main() {
+    if [[ $# -eq 1 && "$1" =~ ^(-h|--help)$ ]]; then
+        usage
+        exit 0
+    fi
+
+    check_dependencies
+    vendir sync
+    source ./vendir/demo-magic/demo-magic.sh
+    export TYPE_SPEED=100
+    export DEMO_PROMPT="${GREEN}➜ ${CYAN}\W ${COLOR_RESET}"
+
+    init_sdkman
+    init
+    use_java $JAVA_8
+    talking_point
+    clone_app
+    talking_point
+    java_dash_jar java8with2.6.log
+    talking_point
+    validate_app
+    talking_point
+    show_memory_usage "$(pgrep java | cut -d ' ' -f 1)" java8with2.6.log2
+    talking_point
+    java_stop
+    talking_point
+    rewrite_application
+    talking_point
+    use_java $JAVA_23
+    talking_point
+    java_dash_jar java23with3.3.log
+    talking_point
+    validate_app
+    talking_point
+    show_memory_usage "$(pgrep java | cut -d ' ' -f 1)" java23with3.3.log2
+    talking_point
+    java_stop
+    talking_point
+    java_dash_jar_exploded exploded.log
+    talking_point
+    validate_app
+    talking_point
+    show_memory_usage "$(pgrep java)" exploded.log2
+    talking_point
+    java_stop
+    talking_point
+    java_dash_jar_cds cds.log
+    talking_point
+    validate_app
+    talking_point
+    show_memory_usage "$(pgrep java)" cds.log2
+    talking_point
+    java_stop
+    talking_point
+    stats_so_far_table
+}
+
+main
