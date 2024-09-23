@@ -55,13 +55,13 @@ clone_app() {
 }
 
 spring_boot_start() {
-    displayMessage "Start the Spring Boot application, Wait For It...."
+    displayMessage "Start the Spring Boot application (with java -jar)"
     ./mvnw -q clean package spring-boot:start -DskipTests 2>&1 | tee "$1" &
 }
 
 java_dash_jar() {
-    displayMessage "Start the Spring Boot application, Wait For It...."
-    ./mvnw clean package
+    displayMessage "Start the Spring Boot application (with java -jar)"
+    ./mvnw clean package -DskipTests
     java -jar ./target/$JAR_NAME 2>&1 | tee "$1" &
 }
 
@@ -71,16 +71,22 @@ java_stop() {
     pei "kill -9 $npid"
 }
 
-java_dash_jar_exploded() {
-    displayMessage "Extract the Spring Boot application for efficiency"
+java_dash_jar_extract() {
+    displayMessage "Extract the Spring Boot application for efficiency (java -Djarmode=tools)"
     java -Djarmode=tools -jar ./target/$JAR_NAME extract --destination application
-    displayMessage "Start the extracted Spring Boot application, Wait For It...."
+}
+
+java_dash_jar_exploded() {
+    displayMessage "Start the extracted Spring Boot application, (java -jar [exploded])"
     java -jar ./application/$JAR_NAME 2>&1 | tee "$1" &
 }
 
-java_dash_jar_cds() {
+create_cds_archive() {
   displayMessage "Create a CDS archive"
   java -XX:ArchiveClassesAtExit=application.jsa -Dspring.context.exit=onRefresh -jar application/$JAR_NAME
+}
+
+java_dash_jar_cds() {
   displayMessage "Start the Spring Boot application with CDS archive, Wait For It...."
   java -XX:SharedArchiveFile=application.jsa -jar application/$JAR_NAME 2>&1 | tee "$1" &
 }
@@ -206,6 +212,8 @@ main() {
     talking_point
     java_stop
     talking_point
+    java_dash_jar_exploded
+    talking_point
     java_dash_jar_exploded exploded.log
     talking_point
     validate_app
@@ -213,6 +221,8 @@ main() {
     show_memory_usage "$(pgrep java)" exploded.log2
     talking_point
     java_stop
+    talking_point
+    create_cds_archive
     talking_point
     java_dash_jar_cds cds.log
     talking_point
