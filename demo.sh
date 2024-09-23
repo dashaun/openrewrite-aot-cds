@@ -54,14 +54,9 @@ clone_app() {
     git clone https://github.com/dashaun/hello-spring-boot-2-6.git ./
 }
 
-spring_boot_start() {
-    displayMessage "Start the Spring Boot application (with java -jar)"
-    ./mvnw -q clean package spring-boot:start -DskipTests 2>&1 | tee "$1" &
-}
-
 java_dash_jar() {
     displayMessage "Start the Spring Boot application (with java -jar)"
-    ./mvnw clean package -DskipTests
+    ./mvnw -q clean package -DskipTests
     java -jar ./target/$JAR_NAME 2>&1 | tee "$1" &
 }
 
@@ -115,7 +110,7 @@ show_memory_usage() {
 
 rewrite_application() {
     displayMessage "Upgrade to Spring Boot 3.3"
-    ./mvnw -U org.openrewrite.maven:rewrite-maven-plugin:run \
+    ./mvnw -q -U org.openrewrite.maven:rewrite-maven-plugin:run \
         -Drewrite.recipeArtifactCoordinates=org.openrewrite.recipe:rewrite-spring:LATEST \
         -Drewrite.activeRecipes=org.openrewrite.java.spring.boot3.UpgradeSpringBoot_3_3
 }
