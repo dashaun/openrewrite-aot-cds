@@ -151,7 +151,7 @@ stats_so_far_table() {
     printf "%-35s %-25s %-15s %s\n" "Configuration" "Startup Time (seconds)" "(MB) Used" "(MB) Savings"
     echo "--------------------------------------------------------------------------------------------"
 
-    local mem1 start1 mem2 start2 perc2 percstart2 mem3 start3 perc3 percstart3 mem4 start4 perc4 percstart4 mem5 start5 perc5 percstart5
+    local mem1 start1 mem2 start2 perc2 percstart2 mem3 start3 perc3 percstart3 mem4 start4 perc4 percstart4 mem5 start5 perc5 percstart5 mem6 start6 perc6 percstart6
     mem1=$(cat java8with2.6.log2)
     start1=$(startup_time 'java8with2.6.log')
     printf "%-35s %-25s %-15s %s\n" "Spring Boot 2.6 with Java 8" "$start1" "$mem1" "-"
@@ -162,23 +162,29 @@ stats_so_far_table() {
     percstart2=$(bc <<< "scale=2; 100 - ${start2}/${start1}*100")
     printf "%-35s %-25s %-15s %s \n" "Spring Boot 3.3 with Java 23" "$start2 ($percstart2% faster)" "$mem2" "$perc2%"
 
-    mem5=$(cat aot.log2)
-    perc5=$(bc <<< "scale=2; 100 - ${mem5}/${mem1}*100")
-    start5=$(startup_time 'aot.log')
-    percstart5=$(bc <<< "scale=2; 100 - ${start5}/${start1}*100")
-    printf "%-35s %-25s %-15s %s \n" "Spring Boot 3.3 with AOT processing" "$start5 ($percstart5% faster)" "$mem5" "$perc5%"
-
     mem3=$(cat exploded.log2)
     perc3=$(bc <<< "scale=2; 100 - ${mem3}/${mem1}*100")
     start3=$(startup_time 'exploded.log')
     percstart3=$(bc <<< "scale=2; 100 - ${start3}/${start1}*100")
     printf "%-35s %-25s %-15s %s \n" "Spring Boot 3.3 extracted" "$start3 ($percstart3% faster)" "$mem3" "$perc3%"
 
+    mem5=$(cat aot.log2)
+    perc5=$(bc <<< "scale=2; 100 - ${mem5}/${mem1}*100")
+    start5=$(startup_time 'aot.log')
+    percstart5=$(bc <<< "scale=2; 100 - ${start5}/${start1}*100")
+    printf "%-35s %-25s %-15s %s \n" "Spring Boot 3.3 with AOT processing" "$start5 ($percstart5% faster)" "$mem5" "$perc5%"
+
     mem4=$(cat cds.log2)
     perc4=$(bc <<< "scale=2; 100 - ${mem4}/${mem1}*100")
     start4=$(startup_time 'cds.log')
     percstart4=$(bc <<< "scale=2; 100 - ${start4}/${start1}*100")
     printf "%-35s %-25s %-15s %s \n" "Spring Boot 3.3 with CDS" "$start4 ($percstart4% faster)" "$mem4" "$perc4%"
+
+    mem6=$(cat aotcds.log2)
+    perc6=$(bc <<< "scale=2; 100 - ${mem6}/${mem1}*100")
+    start6=$(startup_time 'aotcds.log')
+    percstart6=$(bc <<< "scale=2; 100 - ${start6}/${start1}*100")
+    printf "%-35s %-25s %-15s %s \n" "Spring Boot 3.3 with AOT+CDS" "$start6 ($percstart6% faster)" "$mem6" "$perc6%"
 
     echo "--------------------------------------------------------------------------------------------"
 }
@@ -200,6 +206,7 @@ main() {
     source ./vendir/demo-magic/demo-magic.sh
     export TYPE_SPEED=100
     export DEMO_PROMPT="${GREEN}➜ ${CYAN}\W ${COLOR_RESET}"
+    export PROMPT_TIMEOUT=5
 
     init_sdkman
     init
@@ -227,16 +234,6 @@ main() {
     talking_point
     java_stop
     talking_point
-    aot_processing
-    talking_point
-    java_dash_jar_aot_enabled aot.log
-    talking_point
-    validate_app
-    talking_point
-    show_memory_usage "$(pgrep java | cut -d ' ' -f 1)" aot.log2
-    talking_point
-    java_stop
-    talking_point
     java_dash_jar_extract
     talking_point
     java_dash_jar_exploded exploded.log
@@ -247,6 +244,16 @@ main() {
     talking_point
     java_stop
     talking_point
+    aot_processing
+    talking_point
+    java_dash_jar_aot_enabled aot.log
+    talking_point
+    validate_app
+    talking_point
+    show_memory_usage "$(pgrep java | cut -d ' ' -f 1)" aot.log2
+    talking_point
+    java_stop
+    talking_point
     create_cds_archive
     talking_point
     java_dash_jar_cds cds.log
@@ -254,6 +261,17 @@ main() {
     validate_app
     talking_point
     show_memory_usage "$(pgrep java)" cds.log2
+    talking_point
+    java_stop
+    talking_point
+    aot_processing
+    talking_point
+    create_cds_archive
+    java_dash_jar_cds aotcds.log
+    talking_point
+    validate_app
+    talking_point
+    show_memory_usage "$(pgrep java)" aotcds.log2
     talking_point
     java_stop
     talking_point
