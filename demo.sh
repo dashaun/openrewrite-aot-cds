@@ -66,6 +66,17 @@ java_stop() {
     pei "kill -9 $npid"
 }
 
+aot_processing() {
+  displayMessage "Package using AOT Processing"
+  ./mvnw -q -Pnative package -DskipTests
+  displayMessage "Done"
+}
+
+java_dash_jar_aot_enabled() {
+  displayMessage "Start the Spring Boot application with AOT enabled"
+  java -Dspring.aot.enabled=true -jar ./target/$JAR_NAME 2>&1 | tee "$1" &
+}
+
 java_dash_jar_extract() {
     displayMessage "Extract the Spring Boot application for efficiency (java -Djarmode=tools)"
     java -Djarmode=tools -jar ./target/$JAR_NAME extract --destination application
@@ -209,7 +220,15 @@ main() {
     show_memory_usage "$(pgrep java | cut -d ' ' -f 1)" java23with3.3.log2
     talking_point
     java_stop
+    aot_processing
     talking_point
+    java_dash_jar_aot_enabled java23withAOT.log
+    talking_point
+    validate_app
+    talking_point
+    show_memory_usage "$(pgrep java | cut -d ' ' -f 1)" java23withAOT.log
+    talking_point
+    java_stop
     java_dash_jar_extract
     talking_point
     java_dash_jar_exploded exploded.log
