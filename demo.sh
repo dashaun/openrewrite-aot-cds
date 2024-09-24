@@ -78,7 +78,7 @@ java_dash_jar_exploded() {
 
 create_cds_archive() {
   displayMessage "Create a CDS archive"
-  java -XX:ArchiveClassesAtExit=application.jsa -Dspring.context.exit=onRefresh -jar application/$JAR_NAME
+  java -XX:ArchiveClassesAtExit=application.jsa -Dspring.context.exit=onRefresh -jar application/$JAR_NAME | grep -v "WARNING"
 }
 
 java_dash_jar_cds() {
@@ -109,10 +109,10 @@ show_memory_usage() {
 }
 
 rewrite_application() {
-    displayMessage "Upgrade to Spring Boot 3.3"
-    ./mvnw -q -U org.openrewrite.maven:rewrite-maven-plugin:run \
+    displayMessage "Upgrade to Spring Boot 3.3 using OpenRewrite"
+    ./mvnw -U org.openrewrite.maven:rewrite-maven-plugin:run \
         -Drewrite.recipeArtifactCoordinates=org.openrewrite.recipe:rewrite-spring:LATEST \
-        -Drewrite.activeRecipes=org.openrewrite.java.spring.boot3.UpgradeSpringBoot_3_3
+        -Drewrite.activeRecipes=org.openrewrite.java.spring.boot3.UpgradeSpringBoot_3_3 | grep "WARNING"
 }
 
 build_oci() {
