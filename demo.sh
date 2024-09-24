@@ -66,9 +66,13 @@ java_stop() {
     pei "kill -9 $npid"
 }
 
+remove_extracted() {
+    rm -rf application
+}
+
 aot_processing() {
   displayMessage "Package using AOT Processing"
-  ./mvnw -q -Pnative package -DskipTests
+  ./mvnw -q -Pnative clean package -DskipTests
   displayMessage "Done"
 }
 
@@ -99,9 +103,9 @@ java_dash_jar_cds() {
   java -XX:SharedArchiveFile=application.jsa -jar application/$JAR_NAME 2>&1 | tee "$1" &
 }
 
-spring_boot_stop() {
-    displayMessage "Stop the Spring Boot application"
-    ./mvnw spring-boot:stop -Dspring-boot.stop.fork
+java_dash_jar_aot_cds() {
+  displayMessage "Start the Spring Boot application with CDS archive, Wait For It...."
+  java -Dspring.aot.enabled=true -XX:SharedArchiveFile=application.jsa -jar application/$JAR_NAME 2>&1 | tee "$1" &
 }
 
 validate_app() {
@@ -264,10 +268,13 @@ main() {
     talking_point
     java_stop
     talking_point
+    remove_extracted
     aot_processing
     talking_point
+    java_dash_jar_extract
+    talking_point
     create_cds_archive
-    java_dash_jar_cds aotcds.log
+    java_dash_jar_aot_cds aotcds.log
     talking_point
     validate_app
     talking_point
