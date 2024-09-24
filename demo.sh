@@ -69,6 +69,7 @@ java_stop() {
 java_dash_jar_extract() {
     displayMessage "Extract the Spring Boot application for efficiency (java -Djarmode=tools)"
     java -Djarmode=tools -jar ./target/$JAR_NAME extract --destination application
+    displayMessage "Done"
 }
 
 java_dash_jar_exploded() {
@@ -78,7 +79,8 @@ java_dash_jar_exploded() {
 
 create_cds_archive() {
   displayMessage "Create a CDS archive"
-  java -XX:ArchiveClassesAtExit=application.jsa -Dspring.context.exit=onRefresh -jar application/$JAR_NAME | grep -v "WARNING"
+  java -XX:ArchiveClassesAtExit=application.jsa -Dspring.context.exit=onRefresh -jar application/$JAR_NAME | grep -v "[warning][cds]"
+  displayMessage "Done"
 }
 
 java_dash_jar_cds() {
